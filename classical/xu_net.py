@@ -3,6 +3,7 @@ import torch.nn.functional as F
 
 
 class Net(nn.Module):
+
     def __init__(self):
         super().__init__()
         #self.conv1 = nn.Conv2d(3, 6, 5)
@@ -21,6 +22,7 @@ class Net(nn.Module):
             nn.ReLU(),
             nn.Linear(20, 10),
         )
+
     def forward(self, x):
         #x = self.pool(F.relu(self.conv1(x)))
         #x = self.pool(F.relu(self.conv2(x)))
@@ -33,5 +35,6 @@ class Net(nn.Module):
         '''
         logits = self.linear_relu_stack(x)
         return logits
+
 
 #net = Net()
