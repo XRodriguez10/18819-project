@@ -2,18 +2,25 @@
 Solve the MIP problem.
 """
 
+import argparse
+
+import numpy as np
+import cvxpy as cp
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-import numpy as np
-
-import cvxpy as cp
+from utils.common import setup_logger
 
 batch_size = 1
-learning_rate = 0.01
-num_epoches = 20
+# learning_rate = 0.01
+# num_epoches = 20
+
+
+def load_pretrained_model():
+    pass
+
 
 data_tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
 
@@ -135,3 +142,44 @@ img_new = torch.from_numpy(img_new).float().cpu()
 # print(model(torch.from_numpy(img).float().cuda()))
 print(model(torch.from_numpy(img).float().cpu()))
 print(model(img_new))
+
+
+def main(args):
+    """Main logic"""
+    load_pretrained_model()
+
+
+def get_input_args():
+    """Create and parse arguments."""
+    parser = argparse.ArgumentParser(
+        description="Classical solver to the adversial attack problem.")
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="show debug messages",
+    )
+
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    args = get_input_args()
+    logger = setup_logger("main", verbose=args.verbose)
+    logger.debug("Received input argument: {}".format(args))
+
+    try:
+        main(args)
+    except Exception as e:
+        logger.exception("Failed to run the script due to exception: {}".format(e))
+    except KeyboardInterrupt as e:
+        logger.exception("Exit due to keyboard interrupt: {}".format(e))
+    except SystemExit as e:
+        if e.code:
+            logger.exception("Exit with a non-zero code: {}".format(e))
+    except BaseException as e:
+        logger.exception("Failed to run the script due to unknown issue: {}".format(e))
+    else:
+        logger.info("Successfully ran the script.")
