@@ -2,7 +2,10 @@
 Solve the MIP problem.
 """
 
+import sys
 import argparse
+
+sys.path.append("../")
 
 import numpy as np
 import cvxpy as cp
@@ -14,139 +17,133 @@ from torchvision import datasets, transforms
 from utils.common import setup_logger
 
 batch_size = 1
-# learning_rate = 0.01
-# num_epoches = 20
 
 
 def load_pretrained_model():
-    pass
+    data_tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
+    train_dataset = datasets.MNIST(root='./data', train=True, transform=data_tf, download=True)
+    test_dataset = datasets.MNIST(root='./data', train=False, transform=data_tf)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    # model = torch.load("./classical/xu_net_for_MNIST.pth", map_location=torch.device('cpu'))
+    model = torch.load("./xu_net_for_MNIST.pth", map_location=torch.device('cpu'))
+
+    for data in test_loader:
+        img, label = data
+        img = img.view(img.size(0), -1)
+        print('img:', img.size())
+        print('label:', label)
+        break
+    #img = img.cuda()
+    #print(model(img))
+    img = img.numpy()
+
+    return model, img
 
 
-data_tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
+def get_model_params(model):
+    weights_and_bias = []
+    weights = []
+    bias = []
 
-train_dataset = datasets.MNIST(root='./data', train=True, transform=data_tf, download=True)
+    for name, param in model.named_parameters():
+        weights_and_bias.append(param.cpu().detach().numpy())
 
-test_dataset = datasets.MNIST(root='./data', train=False, transform=data_tf)
+    for i in range(len(weights_and_bias)):
+        if i % 2 == 0:
+            weights.append(weights_and_bias[i])
+        else:
+            bias.append(weights_and_bias[i].reshape(1, -1))
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    print("Num of weights: {}".format(len(weights)))
+    print("Num of biases: {}".format(len(bias)))
 
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    return weights, bias
 
-model = torch.load("./classical/xu_net_for_MNIST.pth", map_location=torch.device('cpu'))
 
-for data in test_loader:
-    img, label = data
-    img = img.view(img.size(0), -1)
-    print('img:', img.size())
-    print('label:', label)
-    break
-#img = img.cuda()
-#print(model(img))
-img = img.numpy()
+def construct_math_program(model, img, weights, bias):
+    perturb = cp.Variable((1, 784))
+    constraints = [-0.1 <= perturb, perturb <= 0.1]
+    x = img + perturb
+    layer_idx = 0
+    lb = []
+    ub = []
+    a = []
+    y_list = []
+    for name, layer in model.named_modules():
 
-# Create weight and bias lists
-weights_and_bias = []
-weights = []
-bias = []
+        if type(layer) is nn.Linear:
+            print("Considering: name: {}, layer: {}".format(name, layer))
+            #print("yes")
+            x = x @ weights[layer_idx].T + bias[layer_idx]
+            #print('x:',x)
+            row, col = x.shape
+            #print("row:",row)
+            #print("col:",col)
+            lb_temp = np.zeros_like(x, shape=x.shape)
+            #print(lb_temp)
+            #print(lb_temp.shape)
+            ub_temp = np.zeros_like(x, shape=x.shape)
+            for i in range(row):
+                for j in range(col):
+                    obj = cp.Minimize(x[i][j])
+                    prob = cp.Problem(obj, constraints)
+                    lb_temp[i][j] = prob.solve()
+                    obj = cp.Maximize(x[i][j])
+                    prob = cp.Problem(obj, constraints)
+                    ub_temp[i][j] = prob.solve()
+            lb.append(lb_temp)
+            ub.append(ub_temp)
+            print('lower bound:', lb_temp)
+            print('upper bound:', ub_temp)
+            #print('y:',y_list)
+            #print("optimal value:",prob.solve())
+            #print(x.value)
+            layer_idx += 1
+        elif type(layer) is nn.ReLU:
+            print("Considering: name: {}, layer: {}".format(name, layer))
+            a_temp = cp.Variable(x.shape, boolean=True)
+            row, col = x.shape
+            lb_temp = lb[layer_idx - 1]
+            ub_temp = ub[layer_idx - 1]
+            y = cp.Variable(x.shape)
+            for i in range(row):
+                for j in range(col):
+                    constraints.append(y[i][j] <= x[i][j] - lb_temp[i][j] * (1 - a_temp[i][j]))
+                    constraints.append(y[i][j] >= x[i][j])
+                    constraints.append(y[i][j] <= ub_temp[i][j] * a_temp[i][j])
+                    constraints.append(y[i][j] >= 0)
+            x = y
+            #print('reach here')
+            y_list.append(y)
+            a.append(a_temp)
 
-# for name,layer in model.named_modules():
-#     print("name:",name)
-#     print("layer:",layer)
-#     print("type:",type(layer))
+    # Define the objective function
+    obj = cp.Minimize(x[0][7] - x[0][2])
+    prob = cp.Problem(obj, constraints)
 
-for name, param in model.named_parameters():
-    # print('name:',name)
-    # print('param:',param)
-    # print('param_np:',param.cpu().detach().numpy())
-    weights_and_bias.append(param.cpu().detach().numpy())
-
-for i in range(len(weights_and_bias)):
-    if i % 2 == 0:
-        weights.append(weights_and_bias[i])
-    else:
-        bias.append(weights_and_bias[i].reshape(1, -1))
-
-print("Num of weights: {}".format(len(weights)))
-print("Num of biases: {}".format(len(bias)))
-
-# Define the math programming
-
-perturb = cp.Variable((1, 784))
-constraints = [-0.1 <= perturb, perturb <= 0.1]
-x = img + perturb
-layer_idx = 0
-lb = []
-ub = []
-a = []
-y_list = []
-for name, layer in model.named_modules():
-
-    if type(layer) is nn.Linear:
-        print("Considering: name: {}, layer: {}".format(name, layer))
-        #print("yes")
-        x = x @ weights[layer_idx].T + bias[layer_idx]
-        #print('x:',x)
-        row, col = x.shape
-        #print("row:",row)
-        #print("col:",col)
-        lb_temp = np.zeros_like(x, shape=x.shape)
-        #print(lb_temp)
-        #print(lb_temp.shape)
-        ub_temp = np.zeros_like(x, shape=x.shape)
-        for i in range(row):
-            for j in range(col):
-                obj = cp.Minimize(x[i][j])
-                prob = cp.Problem(obj, constraints)
-                lb_temp[i][j] = prob.solve()
-                obj = cp.Maximize(x[i][j])
-                prob = cp.Problem(obj, constraints)
-                ub_temp[i][j] = prob.solve()
-        lb.append(lb_temp)
-        ub.append(ub_temp)
-        print('lower bound:', lb_temp)
-        print('upper bound:', ub_temp)
-        #print('y:',y_list)
-        #print("optimal value:",prob.solve())
-        #print(x.value)
-        layer_idx += 1
-    elif type(layer) is nn.ReLU:
-        print("Considering: name: {}, layer: {}".format(name, layer))
-        a_temp = cp.Variable(x.shape, boolean=True)
-        row, col = x.shape
-        lb_temp = lb[layer_idx - 1]
-        ub_temp = ub[layer_idx - 1]
-        y = cp.Variable(x.shape)
-        for i in range(row):
-            for j in range(col):
-                constraints.append(y[i][j] <= x[i][j] - lb_temp[i][j] * (1 - a_temp[i][j]))
-                constraints.append(y[i][j] >= x[i][j])
-                constraints.append(y[i][j] <= ub_temp[i][j] * a_temp[i][j])
-                constraints.append(y[i][j] >= 0)
-        x = y
-        #print('reach here')
-        y_list.append(y)
-        a.append(a_temp)
-
-print("done construction")
-
-# Define the objective function
-obj = cp.Minimize(x[0][7] - x[0][2])
-
-prob = cp.Problem(obj, constraints)
-print("optimal value:", prob.solve())
-#print("perturb value:",perturb.value)
-
-img_new = img + perturb.value
-# img_new = torch.from_numpy(img_new).float().cuda()
-img_new = torch.from_numpy(img_new).float().cpu()
-# print(model(torch.from_numpy(img).float().cuda()))
-print(model(torch.from_numpy(img).float().cpu()))
-print(model(img_new))
+    return prob, perturb
 
 
 def main(args):
     """Main logic"""
-    load_pretrained_model()
+    model, img = load_pretrained_model()
+
+    weights, bias = get_model_params(model)
+
+    prob, perturb = construct_math_program(model, img, weights, bias)
+
+    optimal_value = prob.solve()
+
+    print("optimal value: {}".format(optimal_value))
+    #print("perturb value:",perturb.value)
+
+    img_new = img + perturb.value
+    # img_new = torch.from_numpy(img_new).float().cuda()
+    img_new = torch.from_numpy(img_new).float().cpu()
+    # print(model(torch.from_numpy(img).float().cuda()))
+    print(model(torch.from_numpy(img).float().cpu()))
+    print(model(img_new))
 
 
 def get_input_args():
