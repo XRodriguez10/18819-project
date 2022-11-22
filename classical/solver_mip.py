@@ -4,8 +4,9 @@ Solve the MIP problem.
 
 import sys
 import argparse
+import os
 
-sys.path.append("../")
+sys.path.append(os.path.realpath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
 import cvxpy as cp
@@ -20,28 +21,31 @@ batch_size = 1
 
 
 def load_pretrained_model():
+    """Load the pre-trained model and fetch a single image from the test dataset."""
+    project_path = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
+    logger.debug("Project path: {}".format(project_path))
+
+    data_path = os.path.join(project_path, "data")
+    model_path = os.path.join(project_path, "classical/xu_net_for_MNIST.pth")
+
     data_tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
-    train_dataset = datasets.MNIST(root='./data', train=True, transform=data_tf, download=True)
-    test_dataset = datasets.MNIST(root='./data', train=False, transform=data_tf)
+    train_dataset = datasets.MNIST(root=data_path, train=True, transform=data_tf, download=True)
+    test_dataset = datasets.MNIST(root=data_path, train=False, transform=data_tf)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    # model = torch.load("./classical/xu_net_for_MNIST.pth", map_location=torch.device('cpu'))
-    model = torch.load("./xu_net_for_MNIST.pth", map_location=torch.device('cpu'))
+    model = torch.load(model_path, map_location=torch.device('cpu'))
 
     for data in test_loader:
         img, label = data
         img = img.view(img.size(0), -1)
-        print('img:', img.size())
-        print('label:', label)
         break
-    #img = img.cuda()
-    #print(model(img))
     img = img.numpy()
 
     return model, img
 
 
 def get_model_params(model):
+    """Get the parameters of the model."""
     weights_and_bias = []
     weights = []
     bias = []
@@ -55,13 +59,16 @@ def get_model_params(model):
         else:
             bias.append(weights_and_bias[i].reshape(1, -1))
 
-    print("Num of weights: {}".format(len(weights)))
-    print("Num of biases: {}".format(len(bias)))
+    logger.info("Num of weights: {}".format(len(weights)))
+    logger.info("Num of biases: {}".format(len(bias)))
 
     return weights, bias
 
 
 def construct_math_program(model, img, weights, bias):
+    """
+    Construct the math program to solve.
+    """
     perturb = cp.Variable((1, 784))
     constraints = [-0.1 <= perturb, perturb <= 0.1]
     x = img + perturb
@@ -70,19 +77,13 @@ def construct_math_program(model, img, weights, bias):
     ub = []
     a = []
     y_list = []
-    for name, layer in model.named_modules():
 
+    for name, layer in model.named_modules():
         if type(layer) is nn.Linear:
-            print("Considering: name: {}, layer: {}".format(name, layer))
-            #print("yes")
+            logger.info("Considering: name: {}, layer: {}".format(name, layer))
             x = x @ weights[layer_idx].T + bias[layer_idx]
-            #print('x:',x)
             row, col = x.shape
-            #print("row:",row)
-            #print("col:",col)
             lb_temp = np.zeros_like(x, shape=x.shape)
-            #print(lb_temp)
-            #print(lb_temp.shape)
             ub_temp = np.zeros_like(x, shape=x.shape)
             for i in range(row):
                 for j in range(col):
@@ -94,14 +95,15 @@ def construct_math_program(model, img, weights, bias):
                     ub_temp[i][j] = prob.solve()
             lb.append(lb_temp)
             ub.append(ub_temp)
-            print('lower bound:', lb_temp)
-            print('upper bound:', ub_temp)
-            #print('y:',y_list)
-            #print("optimal value:",prob.solve())
-            #print(x.value)
+
+            logger.info("  lower bound: ")
+            print(lb_temp)
+            logger.info("  upper bound: ")
+            print(ub_temp)
+
             layer_idx += 1
         elif type(layer) is nn.ReLU:
-            print("Considering: name: {}, layer: {}".format(name, layer))
+            logger.info("Considering: name: {}, layer: {}".format(name, layer))
             a_temp = cp.Variable(x.shape, boolean=True)
             row, col = x.shape
             lb_temp = lb[layer_idx - 1]
@@ -114,7 +116,6 @@ def construct_math_program(model, img, weights, bias):
                     constraints.append(y[i][j] <= ub_temp[i][j] * a_temp[i][j])
                     constraints.append(y[i][j] >= 0)
             x = y
-            #print('reach here')
             y_list.append(y)
             a.append(a_temp)
 
@@ -128,22 +129,23 @@ def construct_math_program(model, img, weights, bias):
 def main(args):
     """Main logic"""
     model, img = load_pretrained_model()
-
     weights, bias = get_model_params(model)
 
     prob, perturb = construct_math_program(model, img, weights, bias)
 
     optimal_value = prob.solve()
+    logger.info("Optimal value reported by the classical solver: {}".format(optimal_value))
 
-    print("optimal value: {}".format(optimal_value))
-    #print("perturb value:",perturb.value)
-
+    # Compare the prediction result of the original and perturbed image
     img_new = img + perturb.value
-    # img_new = torch.from_numpy(img_new).float().cuda()
     img_new = torch.from_numpy(img_new).float().cpu()
-    # print(model(torch.from_numpy(img).float().cuda()))
-    print(model(torch.from_numpy(img).float().cpu()))
-    print(model(img_new))
+    original_pred = model(torch.from_numpy(img).float().cpu())
+    perturbed_pred = model(img_new)
+
+    logger.info("Prediction given the original image:")
+    print(original_pred)
+    logger.info("Prediction given the perturbed image:")
+    print(perturbed_pred)
 
 
 def get_input_args():
@@ -179,4 +181,4 @@ if __name__ == "__main__":
     except BaseException as e:
         logger.exception("Failed to run the script due to unknown issue: {}".format(e))
     else:
-        logger.info("Successfully ran the script.")
+        logger.info("Successfully ran the classical solver.")
