@@ -133,7 +133,12 @@ def main(args):
 
     prob, perturb = construct_math_program(model, img, weights, bias)
 
-    optimal_value = prob.solve()
+    optimal_value = None
+    if args.CPLEX:
+        optimal_value = prob.solve(solver=cp.CPLEX, cplex_filename='model.lp')
+    else:
+        optimal_value = prob.solve()
+        
     logger.info("Optimal value reported by the classical solver: {}".format(optimal_value))
 
     # Compare the prediction result of the original and perturbed image
@@ -142,10 +147,8 @@ def main(args):
     original_pred = model(torch.from_numpy(img).float().cpu())
     perturbed_pred = model(img_new)
 
-    logger.info("Prediction given the original image:")
-    print(original_pred)
-    logger.info("Prediction given the perturbed image:")
-    print(perturbed_pred)
+    logger.info(f"Prediction given the original image:\n{original_pred}")
+    logger.info(f"Prediction given the perturbed image:\n{perturbed_pred}")
 
 
 def get_input_args():
@@ -158,6 +161,13 @@ def get_input_args():
         "--verbose",
         action="store_true",
         help="show debug messages",
+    )
+
+    parser.add_argument(
+        "-C",
+        "--CPLEX",
+        action="store_true",
+        help="Use CPLEX solver and write the model to a .lp file.",
     )
 
     args = parser.parse_args()
@@ -181,4 +191,7 @@ if __name__ == "__main__":
     except BaseException as e:
         logger.exception("Failed to run the script due to unknown issue: {}".format(e))
     else:
-        logger.info("Successfully ran the classical solver.")
+        if args.CPLEX:
+            logger.info("Successfully ran the classical solver using CPLEX.")
+        else:
+            logger.info("Successfully ran the classical solver using CVXOPT.")
