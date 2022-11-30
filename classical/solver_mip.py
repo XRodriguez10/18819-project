@@ -189,7 +189,7 @@ def main(args):
         f"Probability distribution over 10 classes given the perturbed image:\n{perturbed_pred.detach().numpy()}"
     )
     logger.info(f"Prediction given the original image: class {original_class}")
-    logger.info(f"Prediction given the perturbed image: class {perturbed_class}")
+    logger.info(f"Prediction given the worst perturbed image: class {perturbed_class}")
     if original_class == perturbed_class:
         logger.info(f"No adversarial input exists for this model.")
     else:
