@@ -85,7 +85,7 @@ def main(args):
     """Main logic"""
     model, img = load_pretrained_model()
 
-    TIME_LIMIT = 60
+    TIME_LIMIT = 5
 
     logger.info("")
     logger.info(f"Solving the final LP with D-Wave...")
