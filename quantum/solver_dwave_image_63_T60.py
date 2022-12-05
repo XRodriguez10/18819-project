@@ -162,7 +162,7 @@ def get_input_args():
 
 if __name__ == "__main__":
     args = get_input_args()
-    logger = setup_logger("classical", verbose=args.verbose)
+    logger = setup_logger("quantum", verbose=args.verbose)
     logger.debug("Received input argument: {}".format(args))
 
     try:
