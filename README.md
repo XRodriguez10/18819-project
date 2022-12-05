@@ -3,12 +3,12 @@
 CMU 18-819, Fall 2022
 
 - Claudio Gomes (cpratago@andrew.cmu.edu)
-- Ke Xu ()
+- Ke Xu (kx1@andrew.cmu.edu)
 - Yuxuan Zheng (yzheng5@andrew.cmu.edu)
 
 ---
 
-This is the repository to hold the artifacts of our project to evaluate the robustness of a pre-trained neural network with both the classical and quantum approaches.
+This is the repository to hold the artifacts of our project to evaluate the robustness of a pre-trained neural network with both the classical and quantum approach.
 
 Structure of the files:
 
