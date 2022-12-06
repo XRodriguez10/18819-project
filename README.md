@@ -14,20 +14,25 @@ Structure of the files:
 
 ```
 Project Repository
-│   notebook.ipynb              # Notebook to explain the project and execute the solvers
-│   model.lp                    # MILP model dumped by CPLEX
-│   sampleset                   # ???
+│   notebook.ipynb                    # Notebook to explain the project and execute the solvers
+│   model.lp                          # MILP model dumped by CPLEX
+│   sampleset                         # Saved sampleset from D-Wave
 │
 └─── classical
-│   │   solver_mip.py           # The classical solver
-│   │   xu_net.py               # Neural network structure
-│   │   xu_net_for_MNIST.pth    # Pre-trained model parameters
+│   │   solver_mip.py                 # The classical solver
+│   │   xu_net.py                     # Neural network structure
+│   │   xu_net_for_MNIST.pth          # Pre-trained model parameters
+|   |   solver_mip_images_finder.py   # Construct .lp files for each image
+│
+└─── lp_files                         # LP files for evaluating each image
 │
 └─── quantum
-│   │   solver_dwave.py         # The quantum solver
+│   │   solver_dwave.py               # The quantum solver
+│   │   solver_dwave_image*           # Evaluate a certain image with different sample time
+│
+└─── samplesetsT*                     # Sample sets with different sample time
 │
 └─── utils
-│   │   common.py               # Helper functions
-│
+│   │   common.py                     # Helper functions
 │
 ```
