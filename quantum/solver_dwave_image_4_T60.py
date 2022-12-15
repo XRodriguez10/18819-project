@@ -74,7 +74,7 @@ def parse_sample(sample):
     for i in range(784):
         perturb[i] = variables[f"x{i+21}"]
 
-    return perturb
+    return (sample.energy, perturb)
 
 def main(args):
     """Main logic"""
@@ -82,6 +82,7 @@ def main(args):
 
     TIME_LIMIT = 60
 
+    negative_values_found = []
     images_found = [4]
 
     attacks_found = []
@@ -121,7 +122,10 @@ def main(args):
             unpickle_file = open(sampleset_path, 'rb')
             sampleset = dimod.SampleSet.from_serializable(pickle.load(unpickle_file))
 
-            perturb = parse_sample(sampleset.filter(lambda row: row.is_feasible).first)
+            (value, perturb) = parse_sample(sampleset.filter(lambda row: row.is_feasible).first)
+            
+            if value < 0:
+                negative_values_found.append(i)
 
             # Compare the prediction result of the original and perturbed image
             img_new = img + perturb
@@ -141,6 +145,8 @@ def main(args):
 
             logger.info(f"Found {len(attacks_found)} adversarial examples so far: {attacks_found}.")
             print(f"Found {len(attacks_found)} adversarial examples so far: {attacks_found}.")
+            logger.info(f"Found {len(negative_values_found)} negative objective values so far: {negative_values_found}.")
+            print(f"Found {len(negative_values_found)} negative objective values so far: {negative_values_found}.")
         i += 1
 
 
@@ -180,4 +186,4 @@ if __name__ == "__main__":
             "Failed to run the script due to unknown issue: {}".format(e))
     else:
         logger.info(
-            "Successfully ran D-Wave's Hybrid CQM Solver for 50 images.")
+            "Successfully ran D-Wave's Hybrid CQM Solver for image 4.")

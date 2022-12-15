@@ -78,7 +78,7 @@ def parse_sample(sample):
     for i in range(784):
         perturb[i] = variables[f"x{i+21}"]
 
-    return perturb
+    return (sample.energy, perturb)
 
 
 def main(args):
@@ -109,7 +109,7 @@ def main(args):
 
         logger.info("{} feasible solutions of {}.".format(sampleset.record.is_feasible.sum(),
                                                           len(sampleset)))
-        logger.info(f"Best sample: {sampleset.filter(lambda row: row.is_feasible).first}")
+        # logger.info(f"Best sample: {sampleset.filter(lambda row: row.is_feasible).first}")
 
         perturb = parse_sample(sampleset.filter(lambda row: row.is_feasible).first)
 
