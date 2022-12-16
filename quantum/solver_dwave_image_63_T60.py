@@ -147,6 +147,15 @@ def main(args):
             print(f"Found {len(attacks_found)} adversarial examples so far: {attacks_found}.")
             logger.info(f"Found {len(negative_values_found)} negative objective values so far: {negative_values_found}.")
             print(f"Found {len(negative_values_found)} negative objective values so far: {negative_values_found}.")
+            logger.info(
+                f"value:{value}"
+            )
+            logger.info(
+                f"Probability distribution over 10 classes given the original image:\n{original_pred.detach().numpy()}"
+            )
+            logger.info(
+                f"Probability distribution over 10 classes given the perturbed image:\n{perturbed_pred.detach().numpy()}"
+            )
         i += 1
 
 

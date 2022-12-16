@@ -61,7 +61,7 @@ def get_model_params(model):
     return weights, bias
 
 
-def construct_math_program(model, img, weights, bias):
+def construct_math_program(model, img, weights, bias, true, target):
     """
     Construct the math program to solve.
     """
@@ -124,11 +124,11 @@ def construct_math_program(model, img, weights, bias):
     logger.info("")
     logger.info(f"Stage 2: constructing the final LP to solve...")
 
-    # For this particular image, the correct predication if class 7
-    # Here, we are trying to minimize the predication probability between class 7 and class 2,
-    # meaning that we are trying to make the model to make a very wrong prediction towards class 2.
-    # And we want to see if we can successfully fool the model to change the predication from class 7 to class 2.
-    obj = cp.Minimize(x[0][7] - x[0][2])
+    # For this particular image, the correct predication is class true
+    # Here, we are trying to minimize the predication probability between class true and class target,
+    # meaning that we are trying to make the model to make a very wrong prediction towards class target.
+    # And we want to see if we can successfully fool the model to change the predication from class true to class target.
+    obj = cp.Minimize(x[0][true] - x[0][target])
     prob = cp.Problem(obj, constraints)
 
     logger.info(f"...done")
@@ -144,37 +144,39 @@ def main(args):
     i = 0
     for data in test_loader:
         img, label = data
-        img = img.view(img.size(0), -1)
-        img = img.numpy()
+        ### Only do it for images of the number 3.
+        if label == 3:
+            img = img.view(img.size(0), -1)
+            img = img.numpy()
 
-        weights, bias = get_model_params(model)
+            weights, bias = get_model_params(model)
 
-        prob, perturb = construct_math_program(model, img, weights, bias)
+            prob, perturb = construct_math_program(model, img, weights, bias, label, 8)
 
-        logger.info("")
-        logger.info(f"Solving the final LP...")
-        optimal_value = prob.solve(
-            solver=cp.CPLEX,
-            cplex_filename=os.path.join(project_path, f"lp_files/image{i}.lp"),
-        )
+            logger.info("")
+            logger.info(f"Solving the final LP...")
+            optimal_value = prob.solve(
+                solver=cp.CPLEX,
+                cplex_filename=os.path.join(project_path, f"lp_files/image{i}.lp"),
+            )
 
-        logger.info("Optimal value reported by the classical solver: {}".format(optimal_value))
+            logger.info("Optimal value reported by the classical solver: {}".format(optimal_value))
 
-        # Compare the prediction result of the original and perturbed image
-        img_new = img + perturb.value
-        img_new = torch.from_numpy(img_new).float().cpu()
-        original_pred = model(torch.from_numpy(img).float().cpu())
-        perturbed_pred = model(img_new)
-        original_class = torch.argmax(original_pred)
-        perturbed_class = torch.argmax(perturbed_pred)
+            # Compare the prediction result of the original and perturbed image
+            img_new = img + perturb.value
+            img_new = torch.from_numpy(img_new).float().cpu()
+            original_pred = model(torch.from_numpy(img).float().cpu())
+            perturbed_pred = model(img_new)
+            original_class = torch.argmax(original_pred)
+            perturbed_class = torch.argmax(perturbed_pred)
 
-        if original_class == perturbed_class:
-            logger.info(f"No adversarial input exists for this model for image{i}.")
-        else:
-            logger.info(f"There exists adversarial inputs for this model for image{i}.")
-            images_found.append(i)
-        
-        logger.info(f"Found so far: {images_found}.")
+            if original_class == perturbed_class:
+                logger.info(f"No adversarial input exists for this model for image{i}.")
+            else:
+                logger.info(f"There exists adversarial inputs for this model for image{i}.")
+                images_found.append(i)
+            
+            logger.info(f"Found so far: {images_found}.")
         i+=1
 
 
